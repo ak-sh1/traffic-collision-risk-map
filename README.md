@@ -3,6 +3,8 @@
 A small machine-learning project built in Python that explores which recorded Toronto
 traffic collisions are more likely to involve an injury.
 
+**Live app:** [Open RoadLens TO](https://toronto-collision-risk-map.streamlit.app/)
+
 ## What it does
 
 - Maps 18 intersections with the highest historical KSI collision counts
