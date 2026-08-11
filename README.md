@@ -1,59 +1,85 @@
-# Toronto Collision Risk Map
+# Toronto Collision Injury-Risk Map
 
-An interactive data project that explores how intersection history, time, weather,
-road surface and lighting can affect a transparent relative-risk score.
+A small machine-learning project built in Python that explores which recorded Toronto
+traffic collisions are more likely to involve an injury.
 
-Repository: https://github.com/ak-sh1/traffic-collision-risk-map
+## What it does
 
-## What the app does
+- Maps 18 intersections with the highest historical KSI collision counts
+- Lets users change the month, day, time and road-user type
+- Uses logistic regression to estimate whether a collision record belongs to the
+  injury or fatal class
+- Compares the mapped intersections for the selected scenario
+- Explains whether each input raises or lowers the model estimate
 
-- Displays 18 Toronto intersections on an interactive map
-- Lets users change the time, weather, road surface and lighting
-- Recalculates a relative score immediately
-- Shows every factor that contributed to the score
-- Ranks intersections using unique KSI collision events from 2018–2025
-- Works on desktop and mobile
+## Why this model
 
-## Data source
+Logistic regression is a standard classification model that is easy to inspect and
+explain. The target contains two real classes—injury/fatal and non-injury—and the app
+reports held-out ROC AUC and accuracy instead of claiming the model is perfect.
 
-The project uses the City of Toronto's **Motor Vehicle Collisions Involving Killed
-or Seriously Injured Persons** dataset, published by Transportation Services.
+The estimate is conditional: it answers **“if a collision occurs, how likely is the
+record to involve an injury?”** It does not predict whether a collision will happen.
 
-Dataset: https://open.toronto.ca/dataset/motor-vehicle-collisions-involving-killed-or-seriously-injured-persons/
+## Data
 
-The source data contains one row per involved person. For the intersection summary,
-records were limited to 2018–2025, rows without two named streets were excluded, and
-events were deduplicated using `collision_id` before intersection counts were created.
+The project uses two City of Toronto datasets:
 
-## How the score works
+- [Traffic Collisions](https://open.toronto.ca/dataset/police-annual-statistical-report-traffic-collisions/)
+- [Motor Vehicle Collisions Involving Killed or Seriously Injured Persons](https://open.toronto.ca/dataset/motor-vehicle-collisions-involving-killed-or-seriously-injured-persons/)
 
-The app deliberately uses an explainable scoring model:
-
-1. Each intersection receives a baseline from its unique historical KSI event count.
-2. Fixed adjustments are added for rush hour or late night.
-3. Additional adjustments are added for rain, snow, fog, wet or icy roads, and reduced lighting.
-4. The result is capped between 10 and 95.
-
-This score is a relative educational indicator—not a probability, collision forecast,
-or navigation recommendation.
+`scripts/prepare_data.py` creates the included 12,000-record stratified sample and
+the 18-location intersection summary for 2018–2025.
 
 ## Technology
 
-- Next.js and React
-- TypeScript
-- Leaflet and OpenStreetMap
-- CSS
+- Python
+- Streamlit
+- Pandas and NumPy
+- scikit-learn
+- Folium and OpenStreetMap
 
 ## Run locally
 
-Requires Node.js 22 or newer.
+Requires Python 3.12 or newer.
 
 ```bash
-npm install
-npm run dev
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
-Then open the local address shown in the terminal.
+## Rebuild the processed data
+
+The Traffic Collisions source file is large, so this command may take a few minutes:
+
+```bash
+python scripts/prepare_data.py
+```
+
+## Run tests
+
+```bash
+pytest -q
+```
+
+## Project structure
+
+```text
+app.py                       Streamlit user interface
+model.py                     Training, prediction and explanation functions
+data/collisions_sample.csv.gz  Compressed model-training sample
+data/intersections.csv       Mapped KSI intersections
+scripts/prepare_data.py      Reproducible data-cleaning pipeline
+tests/test_model.py          Data and model tests
+```
+
+## Limitations
+
+The model does not use live traffic, weather, vehicle speed or road-design data. The
+result is educational and should not be used as a live warning, route recommendation
+or substitute for official road-safety guidance.
 
 ## Author
 

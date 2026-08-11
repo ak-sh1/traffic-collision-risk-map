@@ -1,6 +1,7 @@
-node_modules/
-.next/
-out/
-.env*
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.env
 .DS_Store
-npm-debug.log*
