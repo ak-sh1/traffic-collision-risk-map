@@ -56,7 +56,9 @@ def get_data() -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 @st.cache_resource
-def get_model(collisions: pd.DataFrame) -> dict:
+def get_model(collisions: pd.DataFrame, cache_version: str) -> dict:
+    """Train once per model version so deployments do not reuse stale bundles."""
+    del cache_version
     return train_risk_model(collisions)
 
 
@@ -81,7 +83,7 @@ def probability_label(probability: float) -> str:
 
 
 collisions, intersections = get_data()
-bundle = get_model(collisions)
+bundle = get_model(collisions, cache_version="metrics-v2")
 
 st.markdown(
     """
