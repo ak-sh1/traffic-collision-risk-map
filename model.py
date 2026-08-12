@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -83,8 +83,30 @@ def train_risk_model(collisions: pd.DataFrame) -> dict:
         "model": model,
         "roc_auc": float(roc_auc_score(y_test, test_probabilities)),
         "accuracy": float(accuracy_score(y_test, test_predictions)),
+        "injury_precision": float(precision_score(y_test, test_predictions)),
+        "injury_recall": float(recall_score(y_test, test_predictions)),
         "baseline_values": baseline_values,
     }
+
+
+def historical_summary(
+    collisions: pd.DataFrame,
+    column: str,
+    category_order: list[str],
+) -> pd.DataFrame:
+    """Summarize record counts and observed injury rates for one category."""
+    if column not in CATEGORICAL_FEATURES:
+        raise ValueError(f"Unsupported summary column: {column}")
+
+    summary = (
+        collisions.groupby(column, observed=True)["injury"]
+        .agg(Records="size", injury_rate="mean")
+        .reindex(category_order)
+        .dropna()
+        .reset_index()
+    )
+    summary["Injury rate (%)"] = 100 * summary.pop("injury_rate")
+    return summary.rename(columns={column: "Category"})
 
 
 def make_input(

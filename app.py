@@ -11,6 +11,7 @@ from model import (
     MONTHS,
     ROAD_USERS,
     factor_effects,
+    historical_summary,
     inputs_for_locations,
     load_collisions,
     load_intersections,
@@ -39,6 +40,9 @@ st.markdown(
         [data-testid="stMetric"] { background: #fffdf8; border: 1px solid #ded9cd; padding: .8rem 1rem; border-radius: 14px; }
         [data-testid="stSidebar"] { background: #ebe8df; }
         .model-note { background: #fff8e7; border-left: 4px solid #d28a35; padding: .8rem 1rem; border-radius: 8px; color: #5e4a2b; }
+        .map-legend { color: #51635f; font-size: .88rem; margin: -.25rem 0 .8rem; }
+        .map-legend span { display: inline-block; margin-right: 1rem; }
+        .legend-dot { width: .72rem; height: .72rem; border-radius: 50%; margin-right: .3rem; vertical-align: -.04rem; }
         footer { visibility: hidden; }
     </style>
     """,
@@ -96,6 +100,18 @@ metric_columns[0].metric("Training records", f"{len(collisions):,}")
 metric_columns[1].metric("Mapped intersections", f"{len(intersections):,}")
 metric_columns[2].metric("Analysis period", "2018–2025")
 
+with st.expander("How to use this app", expanded=False):
+    st.markdown(
+        """
+        1. Choose an intersection and scenario in the sidebar.
+        2. Read the model estimate and the factors that changed it.
+        3. Compare locations on the map and review the historical patterns below.
+
+        The percentage answers: **if a recorded collision occurs, how likely is that
+        record to involve an injury?** It does not estimate the chance of a collision.
+        """
+    )
+
 st.sidebar.header("Choose a scenario")
 selected_intersection = st.sidebar.selectbox("Intersection", intersections["intersection"].tolist())
 selected_month = st.sidebar.selectbox("Month", MONTHS, index=9)
@@ -132,6 +148,17 @@ intersections = intersections.assign(
 map_column, result_column = st.columns([1.7, 1], gap="large")
 with map_column:
     st.subheader("Interactive injury-risk map")
+    st.markdown(
+        """
+        <div class="map-legend">
+          <span><i class="legend-dot" style="background:#3d9b77"></i>Lower</span>
+          <span><i class="legend-dot" style="background:#d2ac38"></i>Moderate</span>
+          <span><i class="legend-dot" style="background:#e7903f"></i>Elevated</span>
+          <span><i class="legend-dot" style="background:#d9584a"></i>Higher</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     toronto_map = folium.Map(
         location=[43.72, -79.39],
         zoom_start=10,
@@ -185,6 +212,15 @@ with result_column:
         "chance that the record belongs to the injury or fatal class."
     )
 
+    similar_records = collisions[collisions["road_user"] == selected_road_user]
+    observed_rate = float(similar_records["injury"].mean())
+    st.metric(
+        "Historical rate for this road-user group",
+        f"{100 * observed_rate:.1f}%",
+        help="Observed injury rate in the included sample, without model adjustments.",
+    )
+    st.caption(f"Based on {len(similar_records):,} historical sample records.")
+
     effects = factor_effects(bundle, selected_input).copy()
     effects["Direction"] = effects["Change in estimate"].map(
         lambda value: "Raises estimate" if value > 0.5 else (
@@ -209,6 +245,29 @@ ranking.columns = ["Intersection", "Estimated injury risk", "Historical KSI even
 st.dataframe(ranking, hide_index=True, use_container_width=True)
 
 st.divider()
+st.subheader("Historical patterns in the sample")
+st.write(
+    "These charts show observed injury rates in the included data. They are descriptive "
+    "summaries, not model predictions."
+)
+summary_options = {
+    "Road user": ("road_user", ROAD_USERS),
+    "Time of day": ("hour_band", HOUR_BANDS),
+    "Month": ("month", MONTHS),
+}
+selected_summary = st.selectbox("Compare by", list(summary_options))
+summary_column, summary_order = summary_options[selected_summary]
+summary = historical_summary(collisions, summary_column, summary_order)
+chart_data = summary.set_index("Category")[["Injury rate (%)"]]
+st.bar_chart(chart_data, y_label="Injury rate (%)", color="#b35d3d")
+with st.expander("View record counts and exact values"):
+    display_summary = summary.copy()
+    display_summary["Injury rate (%)"] = display_summary["Injury rate (%)"].map(
+        lambda value: f"{value:.1f}%"
+    )
+    st.dataframe(display_summary, hide_index=True, use_container_width=True)
+
+st.divider()
 method_column, limits_column = st.columns(2, gap="large")
 with method_column:
     st.subheader("How the model works")
@@ -220,7 +279,12 @@ with method_column:
     )
     st.write(
         f"Held-out ROC AUC: **{bundle['roc_auc']:.3f}** · "
-        f"Accuracy: **{100 * bundle['accuracy']:.1f}%**"
+        f"Injury precision: **{100 * bundle['injury_precision']:.1f}%** · "
+        f"Injury recall: **{100 * bundle['injury_recall']:.1f}%**"
+    )
+    st.caption(
+        "ROC AUC measures ranking quality. Precision shows how often an injury prediction "
+        "was correct; recall shows how many injury records the model identified."
     )
 
 with limits_column:

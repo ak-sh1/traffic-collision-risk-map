@@ -1,4 +1,6 @@
 from model import (
+    HOUR_BANDS,
+    historical_summary,
     load_collisions,
     load_intersections,
     make_input,
@@ -39,3 +41,13 @@ def test_model_returns_probability_and_reasonable_auc() -> None:
     probability = predict_injury_probability(bundle, inputs)[0]
     assert 0 <= probability <= 1
     assert bundle["roc_auc"] > 0.65
+    assert 0 <= bundle["injury_precision"] <= 1
+    assert 0 <= bundle["injury_recall"] <= 1
+
+
+def test_historical_summary_reports_rates_and_counts() -> None:
+    collisions = load_collisions()
+    summary = historical_summary(collisions, "hour_band", HOUR_BANDS)
+    assert summary["Category"].tolist() == HOUR_BANDS
+    assert summary["Records"].sum() == len(collisions)
+    assert summary["Injury rate (%)"].between(0, 100).all()

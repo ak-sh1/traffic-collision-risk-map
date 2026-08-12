@@ -13,12 +13,13 @@ traffic collisions are more likely to involve an injury.
   injury or fatal class
 - Compares the mapped intersections for the selected scenario
 - Explains whether each input raises or lowers the model estimate
+- Shows historical injury-rate comparisons by road user, time of day and month
 
 ## Why this model
 
 Logistic regression is a standard classification model that is easy to inspect and
 explain. The target contains two real classes—injury/fatal and non-injury—and the app
-reports held-out ROC AUC and accuracy instead of claiming the model is perfect.
+reports held-out ROC AUC, precision and recall instead of claiming the model is perfect.
 
 The estimate is conditional: it answers **“if a collision occurs, how likely is the
 record to involve an injury?”** It does not predict whether a collision will happen.
