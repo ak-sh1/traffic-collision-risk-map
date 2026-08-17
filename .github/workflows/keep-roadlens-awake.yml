@@ -1,0 +1,25 @@
+name: Keep RoadLens awake
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visit-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Visit RoadLens and verify its health
+        env:
+          APP_BASE_URL: https://toronto-collision-risk-map.streamlit.app/~/+
+        run: |
+          curl             --fail             --silent             --show-error             --location             --retry 3             --retry-delay 10             --max-time 90             "$APP_BASE_URL/"             --output /dev/null
+
+          health_response="$(curl             --fail             --silent             --show-error             --retry 3             --retry-delay 10             --max-time 90             "$APP_BASE_URL/_stcore/health")"
+
+          test "$health_response" = "ok"
