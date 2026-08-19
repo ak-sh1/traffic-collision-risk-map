@@ -4,22 +4,112 @@ on:
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/keep-roadlens-awake.yml"
 
 permissions:
   contents: read
 
 jobs:
   visit-app:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
-      - name: Visit RoadLens and verify its health
+      - name: Install browser automation
+        run: python -m pip install --disable-pip-version-check selenium==4.47.0
+
+      - name: Open RoadLens in headless Chrome
         env:
-          APP_BASE_URL: https://toronto-collision-risk-map.streamlit.app/~/+
+          APP_URL: https://toronto-collision-risk-map.streamlit.app/
         run: |
-          curl             --fail             --silent             --show-error             --location             --retry 3             --retry-delay 10             --max-time 90             "$APP_BASE_URL/"             --output /dev/null
+          python <<'PY'
+          import os
+          import time
 
-          health_response="$(curl             --fail             --silent             --show-error             --retry 3             --retry-delay 10             --max-time 90             "$APP_BASE_URL/_stcore/health")"
+          from selenium import webdriver
+          from selenium.common.exceptions import StaleElementReferenceException
+          from selenium.webdriver.chrome.service import Service
+          from selenium.webdriver.common.by import By
 
-          test "$health_response" = "ok"
+          APP_TITLE = "RoadLens TO"
+          WAKE_BUTTON_XPATH = (
+              "//button[contains("
+              "translate(normalize-space(.), "
+              "'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), "
+              "'get this app back up')]"
+          )
+
+          options = webdriver.ChromeOptions()
+          options.add_argument("--headless=new")
+          options.add_argument("--no-sandbox")
+          options.add_argument("--disable-dev-shm-usage")
+          options.add_argument("--window-size=1440,1000")
+
+          driver_directory = os.environ.get("CHROMEWEBDRIVER")
+          service = (
+              Service(os.path.join(driver_directory, "chromedriver"))
+              if driver_directory
+              else Service()
+          )
+          driver = webdriver.Chrome(service=service, options=options)
+          driver.set_page_load_timeout(120)
+
+          def in_page_or_frame(action):
+              driver.switch_to.default_content()
+              if action():
+                  return True
+
+              frames = driver.find_elements(By.CSS_SELECTOR, "iframe")
+              for frame in frames:
+                  driver.switch_to.default_content()
+                  try:
+                      driver.switch_to.frame(frame)
+                      if action():
+                          return True
+                  except StaleElementReferenceException:
+                      continue
+
+              driver.switch_to.default_content()
+              return False
+
+          def app_is_loaded():
+              return in_page_or_frame(lambda: APP_TITLE in driver.page_source)
+
+          def click_wake_button():
+              def click_if_present():
+                  buttons = driver.find_elements(By.XPATH, WAKE_BUTTON_XPATH)
+                  if not buttons:
+                      return False
+                  buttons[0].click()
+                  return True
+
+              return in_page_or_frame(click_if_present)
+
+          try:
+              driver.get(os.environ["APP_URL"])
+              deadline = time.monotonic() + 180
+              wake_requested = False
+
+              while time.monotonic() < deadline:
+                  if app_is_loaded():
+                      print("RoadLens TO loaded successfully.")
+                      break
+
+                  if not wake_requested and click_wake_button():
+                      wake_requested = True
+                      print("Streamlit app was sleeping; wake-up requested.")
+
+                  time.sleep(3)
+              else:
+                  raise TimeoutError("RoadLens TO did not load within 3 minutes.")
+          except Exception:
+              driver.switch_to.default_content()
+              print(f"Current URL: {driver.current_url}")
+              print(f"Page title: {driver.title}")
+              print(driver.page_source[:2000])
+              raise
+          finally:
+              driver.quit()
+          PY
